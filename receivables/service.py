@@ -16,6 +16,7 @@ from .matching.subsets import SubsetMatcher
 from .reporting.confirmation import Confirmations
 from .reporting.delivery import JournalDelivery
 from .reporting.trace import Trace
+from .reporting.bridge import MovementBridge
 
 
 class Workbench:
@@ -37,6 +38,7 @@ class Workbench:
         self.confirmations = Confirmations(self.db, self.ledger, self.aging)
         self.delivery = JournalDelivery(self.db)
         self.trace = Trace(self.db, self.ledger)
+        self.bridges = MovementBridge(self.db, self.ledger, self.aging, self.controls)
 
     def close(self):
         self.db.close()
@@ -102,6 +104,7 @@ class Workbench:
             ("subset", self.subsets, ["search", "propose"]),
             ("confirmation", self.confirmations, ["submit", "get", "reconcile", "decide", "close"]),
             ("delivery", self.delivery, ["register", "status", "lease", "release", "prepare", "get", "resume", "acknowledge", "verify_checkpoint", "envelope", "verify_envelope"]),
+            ("bridge", self.bridges, ["build", "freeze", "revise", "get", "history", "evidence", "export", "verify"]),
         ]:
             for method in methods:
                 actions[prefix + "." + method] = getattr(component, method)

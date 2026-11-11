@@ -59,6 +59,48 @@ def run():
                 "reverse", "plan:0", "2026-03-01", "valid subsequent correction"
             )
             assert work.periods.verify("feb")["verified"]
+
+            # Movement bridge between the two month-end cutoffs: every difference
+            # between the two balance sheets is attributed once to a ledger event.
+            bridge = work.bridges.build(
+                "monthly-bridge", ["factory"], "CNY", "2026-02-28", "2026-03-31"
+            )
+            assert bridge["checks"]["passed"]
+            assert (
+                bridge["opening_minor"]
+                + sum(bridge["principal_bridge"]["categories_minor"].values())
+                == bridge["closing_minor"]
+            )
+            # The allocation reversal restores the receivable; no cash moves.
+            assert bridge["principal_bridge"]["categories_minor"]["write_off_reversal"] == 12050
+            assert bridge["dispute_bridge"]["cash_included_minor"] == 0
+            frozen = work.bridges.freeze(
+                "monthly-bridge", ["factory"], "CNY",
+                "2026-02-28", "2026-03-31", "controller", require_controls=True,
+            )
+            bridge_path = Path(folder) / "bridge.json"
+            work.bridges.export("monthly-bridge", bridge_path)
+            assert work.bridges.verify(bridge_path)["verified"]
+            # A reopened-period correction becomes a new version; the issued one
+            # stays byte-for-byte identical and remains verifiable.
+            work.ledger.reverse_allocation(
+                "reverse-2", "plan:1", "2026-03-02", "second reopened correction"
+            )
+            revision = work.bridges.revise(
+                "monthly-bridge", "controller", frozen["digest"], require_controls=True
+            )
+            assert revision["version"] == 2 and revision["supersedes"] == 1
+            assert work.bridges.get("monthly-bridge", 1)["digest"] == frozen["digest"]
+            assert revision["closing_minor"] != frozen["closing_minor"]
+            # A reviewer can drill from any summary line to the ledger evidence.
+            evidence = work.bridges.evidence(
+                "monthly-bridge", "inv1:write_off_reversal:reverse"
+            )
+            assert {record["kind"] for record in evidence["supporting_records"]} >= {
+                "allocation",
+                "reversal",
+            }
+
             work.statements.export("statement", Path(folder) / "statement.json")
             assert work.statements.verify(Path(folder) / "statement.json")["verified"]
             assert work.controls.require_valid()["ok"]
@@ -68,5 +110,8 @@ def run():
                 "current_open_minor": work.ledger.balance("inv1")
                 + work.ledger.balance("inv2"),
                 "closed_period_verified": True,
+                "bridge_opening_minor": bridge["opening_minor"],
+                "bridge_closing_minor": bridge["closing_minor"],
+                "bridge_versions": work.bridges.history("monthly-bridge")["versions"],
                 "offline": True,
             }

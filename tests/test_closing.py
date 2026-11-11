@@ -196,6 +196,11 @@ class ClosingCase(unittest.TestCase):
         result = run()
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(result['historical_open_minor'], 5050)
-        self.assertEqual(result['current_open_minor'], 17100)
+        # The second reopened-period correction restores another 29.50 of
+        # receivable on top of the original 171.00 closing exposure.
+        self.assertEqual(result['current_open_minor'], 20050)
         self.assertTrue(result['closed_period_verified'])
+        self.assertEqual(result['bridge_opening_minor'], 5050)
+        self.assertEqual(result['bridge_closing_minor'], 17100)
+        self.assertEqual(len(result['bridge_versions']), 2)
         self.assertTrue(result['offline'])
